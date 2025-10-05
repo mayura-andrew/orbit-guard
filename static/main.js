@@ -328,6 +328,25 @@
         .setLngLat([lng, lat])
         .addTo(map);
 
+    // Hide the placeholder instruction if it exists
+    const placeholder = document.querySelector('.placeholder-text');
+    if (placeholder) {
+        placeholder.style.display = 'none';
+    }
+
+    // Update button to show it's ready
+    const runBtn = document.getElementById('runBtn');
+    if (runBtn && !runBtn.dataset.original) {
+        runBtn.dataset.original = runBtn.innerHTML;
+        runBtn.innerHTML = `<span class="btn-icon">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/>
+            </svg>
+          </span>
+          RUN SIMULATION ✓`;
+        runBtn.style.animation = 'pulse 0.5s ease-in-out';
+    }
+
     map.flyTo({ center: [lng, lat], zoom: 4, speed: 0.7, curve: 1.4, essential: true });
 
     showPopulationFeedback("Fetching...", true);
@@ -476,7 +495,16 @@
     }
     
     if (impactLat === null || impactLon === null) {
-        alert("Please select an impact site on the globe first!");
+        alert("⚠️ Please select an impact site on the globe first!\n\nClick anywhere on the map to choose an impact location.");
+        // Flash the map to draw attention
+        const mapContainer = document.getElementById("map");
+        if (mapContainer) {
+            mapContainer.style.transition = "box-shadow 0.3s";
+            mapContainer.style.boxShadow = "inset 0 0 50px rgba(255, 69, 0, 0.8)";
+            setTimeout(() => {
+                mapContainer.style.boxShadow = "";
+            }, 1000);
+        }
         return;
     }
 
@@ -949,35 +977,42 @@ document.addEventListener('DOMContentLoaded', () => {
     const orbitInfo = document.getElementById('orbitInfo');
     const selectImpactBtn = document.getElementById('selectImpactBtn');
 
-    closeOrbitModal.addEventListener('click', () => {
-    orbitModal.style.display = 'none';
-    stopOrbitAnimation();
-    });
-
-    orbitModal.addEventListener('click', (e) => {
-    if (e.target === orbitModal) {
-        orbitModal.style.display = 'none';
-        stopOrbitAnimation();
+    if (closeOrbitModal) {
+        closeOrbitModal.addEventListener('click', () => {
+            if (orbitModal) orbitModal.style.display = 'none';
+            stopOrbitAnimation();
+        });
     }
-    });
 
-    selectImpactBtn.addEventListener('click', () => {
-    orbitModal.style.display = 'none';
-    neoModal.style.display = 'none';
-    stopOrbitAnimation();
-    
-    if (selectedNEO) {
-        const closeApproach = selectedNEO.close_approach_data?.[0] || {};
-        const diameterMin = selectedNEO.estimated_diameter?.kilometers?.estimated_diameter_min || 0;
-        const diameterMax = selectedNEO.estimated_diameter?.kilometers?.estimated_diameter_max || 0;
-        const diameterAvg = (diameterMin + diameterMax) / 2;
-        const velocityKmS = parseFloat(closeApproach.relative_velocity?.kilometers_per_second) || 20;
-        
-        updateSimulatorParameters(diameterAvg, velocityKmS);
-        
-        alert(`Loaded data for ${selectedNEO.name}!\n\nDiameter: ${diameterAvg.toFixed(2)} km\nVelocity: ${velocityKmS.toFixed(2)} km/s\n\nNow click on the globe to select an impact site, then click "Run Simulation".`);
+    if (orbitModal) {
+        orbitModal.addEventListener('click', (e) => {
+            if (e.target === orbitModal) {
+                orbitModal.style.display = 'none';
+                stopOrbitAnimation();
+            }
+        });
     }
-    });
+
+    if (selectImpactBtn) {
+        selectImpactBtn.addEventListener('click', () => {
+            if (orbitModal) orbitModal.style.display = 'none';
+            const neoModal = document.getElementById('neoModal');
+            if (neoModal) neoModal.style.display = 'none';
+            stopOrbitAnimation();
+            
+            if (selectedNEO) {
+                const closeApproach = selectedNEO.close_approach_data?.[0] || {};
+                const diameterMin = selectedNEO.estimated_diameter?.kilometers?.estimated_diameter_min || 0;
+                const diameterMax = selectedNEO.estimated_diameter?.kilometers?.estimated_diameter_max || 0;
+                const diameterAvg = (diameterMin + diameterMax) / 2;
+                const velocityKmS = parseFloat(closeApproach.relative_velocity?.kilometers_per_second) || 20;
+                
+                updateSimulatorParameters(diameterAvg, velocityKmS);
+                
+                alert(`Loaded data for ${selectedNEO.name}!\n\nDiameter: ${diameterAvg.toFixed(2)} km\nVelocity: ${velocityKmS.toFixed(2)} km/s\n\nNow click on the globe to select an impact site, then click "Run Simulation".`);
+            }
+        });
+    }
 
     function updateSimulatorParameters(diameter, velocity) {
     const diameterSlider = document.getElementById('diameter');

@@ -9,7 +9,85 @@ app = Flask(__name__, static_folder="static", template_folder="templates")
 
 MAPBOX_TOKEN = os.environ.get("MAPBOX_TOKEN", "pk.eyJ1IjoicGVzaGFsYSIsImEiOiJjbWdiNWRldXkwdXhhMmpzNzlzeTFwa3k1In0.baq6CRqbJ6w9-ywkqDkWMA")
 
-
+# Game data configuration
+GAME_DATA = {
+    'scenarios': [
+        {
+            'id': 'apophis_2029',
+            'name': 'Apophis Threat 2029',
+            'budget': 5000000000,  # $5 billion
+            'asteroid': {
+                'name': 'Apophis',
+                'diameter_km': 0.37,
+                'velocity_km_s': 30.7,
+                'density_kg_m3': 3000,
+                'discovery_days': 180  # 6 months warning
+            }
+        },
+        {
+            'id': 'bennu_2182',
+            'name': 'Bennu Impact 2182',
+            'budget': 10000000000,  # $10 billion
+            'asteroid': {
+                'name': 'Bennu',
+                'diameter_km': 0.49,
+                'velocity_km_s': 28.6,
+                'density_kg_m3': 1500,
+                'discovery_days': 365  # 1 year warning
+            }
+        },
+        {
+            'id': 'didymos_emergency',
+            'name': 'Didymos Emergency',
+            'budget': 3000000000,  # $3 billion
+            'asteroid': {
+                'name': 'Didymos',
+                'diameter_km': 0.78,
+                'velocity_km_s': 24.5,
+                'density_kg_m3': 2400,
+                'discovery_days': 90  # 3 months warning - tight!
+            }
+        }
+    ],
+    'deflection_methods': [
+        {
+            'id': 'kinetic',
+            'name': 'Kinetic Impactor',
+            'cost': 500000000,  # $500 million
+            'launch_time_days': 30,
+            'mission_duration_days': 120,
+            'momentum_efficiency': 2.0,  # beta factor
+            'description': 'DART-style kinetic impact'
+        },
+        {
+            'id': 'gravity',
+            'name': 'Gravity Tractor',
+            'cost': 2000000000,  # $2 billion
+            'launch_time_days': 60,
+            'mission_duration_days': 365,
+            'momentum_efficiency': 0.5,
+            'description': 'Long-duration gravitational tug'
+        },
+        {
+            'id': 'nuclear',
+            'name': 'Nuclear Standoff',
+            'cost': 3000000000,  # $3 billion
+            'launch_time_days': 45,
+            'mission_duration_days': 90,
+            'momentum_efficiency': 10.0,
+            'description': 'Nuclear detonation near surface'
+        },
+        {
+            'id': 'ion',
+            'name': 'Ion Beam Shepherd',
+            'cost': 1500000000,  # $1.5 billion
+            'launch_time_days': 90,
+            'mission_duration_days': 180,
+            'momentum_efficiency': 1.5,
+            'description': 'Ion beam deflection system'
+        }
+    ]
+}
 
 
 def calculate_deflection(asteroid_data, method_data, time_remaining_days):
@@ -441,54 +519,10 @@ def simulate():
         return jsonify({"error": str(e)}), 500
 
 
-if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=5000, debug=True)
-
-    from flask import Flask, render_template
-
-app = Flask(__name__)
-
-@app.route('/')
-def home():
-    return render_template('index.html')
-
-@app.route('/game/orbit-guard')
-def orbit_guard():
-    return render_template('game.html')
-
-if __name__ == '__main__':
-    app.run(debug=True)
-
-    from flask import Flask, render_template
-
-app = Flask(__name__)
-
-@app.route('/')
-def home():
-    return render_template('index.html')
-
-@app.route('/game')
-def game():
-    return render_template('game.html')
-
-if __name__ == '__main__':
-    app.run(debug=True)
-
 @app.route("/game")
 def game():
     return render_template("game.html")
 
-from flask import Flask, render_template
 
-app = Flask(__name__)
-
-@app.route('/')
-def index():
-    return render_template('index.html')
-
-@app.route('/game')
-def game():
-    return render_template('game.html')
-
-if __name__ == '__main__':
-    app.run(debug=True)
+if __name__ == "__main__":
+    app.run(host="0.0.0.0", port=5000, debug=True)
