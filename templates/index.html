@@ -1,0 +1,889 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Orbit Guard - Asteroid Impact Simulator</title>
+
+  <!-- Mapbox GL JS -->
+  <script src="https://api.mapbox.com/mapbox-gl-js/v2.15.0/mapbox-gl.js"></script>
+  <link href="https://api.mapbox.com/mapbox-gl-js/v2.15.0/mapbox-gl.css" rel="stylesheet" />
+
+  <!-- Turf.js (Geospatial math) -->
+  <script src="https://cdn.jsdelivr.net/npm/@turf/turf@6/turf.min.js"></script>
+
+  <!-- Three.js (3D orbital visualization) -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+
+  <!-- Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+
+  <!-- Custom Styles -->
+  <link rel="stylesheet" href="/static/style.css" />
+
+  <script>
+    const MAPBOX_TOKEN = "{{ MAPBOX_TOKEN }}";
+  </script>
+</head>
+<body>
+  <div class="container">
+    <!-- Left Control Panel -->
+    <aside id="left-panel">
+      <div class="panel-content">
+        <div class="brand">
+          <div class="brand-icon">
+            <svg width="40" height="40" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <circle cx="20" cy="20" r="18" stroke="url(#grad1)" stroke-width="2"/>
+              <circle cx="20" cy="20" r="8" fill="url(#grad1)"/>
+              <path d="M20 4 L24 12 L20 20 L16 12 Z" fill="url(#grad1)" opacity="0.6"/>
+              <defs>
+                <linearGradient id="grad1" x1="0%" y1="0%" x2="100%" y2="100%">
+                  <stop offset="0%" style="stop-color:#00d4ff;stop-opacity:1" />
+                  <stop offset="100%" style="stop-color:#0099ff;stop-opacity:1" />
+                </linearGradient>
+              </defs>
+            </svg>
+          </div>
+          <h1>ORBIT GUARD</h1>
+          <h2>Asteroid Impact Simulator</h2>
+        </div>
+
+        <div class="instruction-card">
+          <svg class="info-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="10"/>
+            <path d="M12 16v-4M12 8h.01"/>
+          </svg>
+          <p>Click anywhere on the globe to select an impact location.</p>
+        </div>
+
+        <div class="controls">
+          <!-- Diameter -->
+          <div class="control-group">
+            <label for="diameter">
+              <span class="label-text">Asteroid Diameter</span>
+              <span id="diameterValue" class="value-display">1 km</span>
+            </label>
+            <input type="range" id="diameter" min="0.001" max="1000" step="0.001" value="1" class="slider" />
+          </div>
+
+          <!-- Velocity -->
+          <div class="control-group">
+            <label for="velocity">
+              <span class="label-text">Impact Velocity</span>
+              <span id="velocityValue" class="value-display">20 km/s</span>
+            </label>
+            <input type="range" id="velocity" min="11" max="72" step="0.1" value="20" class="slider" />
+          </div>
+
+          <!-- Angle -->
+          <div class="control-group">
+            <label for="angle">
+              <span class="label-text">Impact Angle</span>
+              <span id="angleValue" class="value-display">45°</span>
+            </label>
+            <input type="range" id="angle" min="0" max="90" step="1" value="45" class="slider" />
+          </div>
+
+          <!-- Composition -->
+          <div class="control-group">
+            <label for="composition">
+              <span class="label-text">Asteroid Composition</span>
+              <span id="compositionValue" class="value-display">Dense Rock</span>
+            </label>
+            <select id="composition" class="composition-select">
+              <option value="1000">Ice (1,000 kg/m³)</option>
+              <option value="1500">Porous Rock (1,500 kg/m³)</option>
+              <option value="3000" selected>Dense Rock (3,000 kg/m³)</option>
+              <option value="8000">Iron (8,000 kg/m³)</option>
+            </select>
+          </div>
+
+          <!-- Population Density -->
+          <div class="control-group">
+            <label for="popDensity">
+              <span class="label-text">Population Density</span>
+              <span id="popDensityValue" class="value-display">100 /km²</span>
+            </label>
+            <input type="range" id="popDensity" min="0" max="100000" step="50" value="100" class="slider" />
+          </div>
+        </div>
+
+        <button id="runBtn" class="btn-primary">
+          <span class="btn-icon">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/>
+            </svg>
+          </span>
+          RUN SIMULATION
+        </button>
+      </div>
+    </aside>
+
+    <!-- Map -->
+    <main id="map"></main>
+
+    <!-- Results -->
+    <div id="resultsOverlay" class="results" style="display:none;">
+      <div class="results-header">
+        <h3>IMPACT ANALYSIS</h3>
+        <div class="pulse-indicator"></div>
+      </div>
+      <div class="results-content"></div>
+    </div>
+
+    <!-- NASA NEO Button -->
+    <button id="neoButton" title="View real NASA Near-Earth Objects">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <circle cx="12" cy="12" r="10"/>
+        <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
+        <path d="M2 12h20"/>
+      </svg>
+      NASA NEOs
+    </button>
+
+    <!-- DEFEND EARTH Button -->
+    <button id="defendEarthBtn" class="game-btn" title="Defend Earth Game Mode">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/>
+      </svg>
+      DEFEND EARTH
+    </button>
+
+  </div>
+
+  <!-- Scripts -->
+  <script src="/static/main.js"></script>
+
+  <!-- Redirect script: try server route then fall back to local game.html, then open embedded game HTML if unavailable -->
+  <script>
+    (function () {
+      const btn = document.getElementById('defendEarthBtn');
+      if (!btn) return;
+
+      // Embedded fallback of the local game.html (</script> tokens are escaped to avoid closing this script tag)
+      const embeddedGameHtml = `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Orbit Guard: Defend Earth</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    
+    body {
+      font-family: 'Courier New', monospace;
+      overflow: hidden;
+      background: #000;
+    }
+    
+    #gameCanvas {
+      display: block;
+      width: 100vw;
+      height: 100vh;
+    }
+    
+    #hud {
+      position: absolute;
+      top: 20px;
+      left: 20px;
+      color: #00ff00;
+      font-size: 16px;
+      text-shadow: 0 0 10px #00ff00;
+      background: rgba(0, 0, 0, 0.7);
+      padding: 20px;
+      border: 2px solid #00ff00;
+      border-radius: 8px;
+      min-width: 250px;
+    }
+    
+    .hud-line {
+      margin: 8px 0;
+      display: flex;
+      justify-content: space-between;
+      gap: 20px;
+    }
+    
+    .hud-label {
+      color: #00ffff;
+    }
+    
+    .hud-value {
+      color: #00ff00;
+      font-weight: bold;
+    }
+    
+    #healthBar {
+      width: 200px;
+      height: 20px;
+      background: #001a00;
+      border: 1px solid #00ff00;
+      margin-top: 10px;
+      position: relative;
+      overflow: hidden;
+    }
+    
+    #healthFill {
+      height: 100%;
+      background: linear-gradient(90deg, #00ff00, #00ff88);
+      width: 100%;
+      transition: width 0.3s;
+      box-shadow: 0 0 10px #00ff00;
+    }
+    
+    #controls {
+      position: absolute;
+      bottom: 20px;
+      left: 20px;
+      color: #00ff00;
+      font-size: 12px;
+      background: rgba(0, 0, 0, 0.7);
+      padding: 15px;
+      border: 1px solid #00ff00;
+      border-radius: 8px;
+    }
+    
+    #message {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      color: #00ff00;
+      font-size: 48px;
+      text-shadow: 0 0 20px #00ff00;
+      display: none;
+      text-align: center;
+      background: rgba(0, 0, 0, 0.9);
+      padding: 40px 60px;
+      border: 3px solid #00ff00;
+      border-radius: 12px;
+    }
+    
+    #message.impact {
+      color: #ff0000;
+      text-shadow: 0 0 20px #ff0000;
+      border-color: #ff0000;
+    }
+    
+    #crosshair {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      width: 30px;
+      height: 30px;
+      border: 2px solid #00ff00;
+      border-radius: 50%;
+      pointer-events: none;
+      box-shadow: 0 0 10px #00ff00;
+    }
+    
+    #crosshair::before,
+    #crosshair::after {
+      content: '';
+      position: absolute;
+      background: #00ff00;
+    }
+    
+    #crosshair::before {
+      width: 2px;
+      height: 12px;
+      top: -14px;
+      left: 50%;
+      transform: translateX(-50%);
+    }
+    
+    #crosshair::after {
+      width: 12px;
+      height: 2px;
+      left: -14px;
+      top: 50%;
+      transform: translateY(-50%);
+    }
+
+    #startScreen {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100vw;
+      height: 100vh;
+      background: rgba(0, 0, 0, 0.95);
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      color: #00ff00;
+      z-index: 1000;
+    }
+
+    #startScreen h1 {
+      font-size: 64px;
+      text-shadow: 0 0 30px #00ff00;
+      margin-bottom: 20px;
+    }
+
+    #startScreen p {
+      font-size: 18px;
+      margin: 10px 0;
+      color: #00ffff;
+    }
+
+    #startBtn {
+      margin-top: 40px;
+      padding: 20px 60px;
+      font-size: 24px;
+      background: transparent;
+      color: #00ff00;
+      border: 3px solid #00ff00;
+      cursor: pointer;
+      font-family: 'Courier New', monospace;
+      transition: all 0.3s;
+    }
+
+    #startBtn:hover {
+      background: #00ff00;
+      color: #000;
+      box-shadow: 0 0 30px #00ff00;
+    }
+  </style>
+</head>
+<body>
+  <div id="startScreen">
+    <h1>ORBIT GUARD</h1>
+    <p>DEFEND EARTH</p>
+    <p style="margin-top: 30px;">WASD - Move Spacecraft</p>
+    <p>Mouse - Rotate Camera</p>
+    <p>SPACE / Left Click - Fire Kinetic Impactor</p>
+    <button id="startBtn">START MISSION</button>
+  </div>
+
+  <canvas id="gameCanvas"></canvas>
+  
+  <div id="hud">
+    <div class="hud-line">
+      <span class="hud-label">INCOMING THREATS:</span>
+      <span class="hud-value" id="meteorCount">5</span>
+    </div>
+    <div class="hud-line">
+      <span class="hud-label">SCORE:</span>
+      <span class="hud-value" id="score">0</span>
+    </div>
+    <div class="hud-line">
+      <span class="hud-label">WEAPON:</span>
+      <span class="hud-value">KINETIC IMPACTOR</span>
+    </div>
+    <div class="hud-line">
+      <span class="hud-label">EARTH INTEGRITY:</span>
+    </div>
+    <div id="healthBar">
+      <div id="healthFill"></div>
+    </div>
+  </div>
+  
+  <div id="crosshair"></div>
+  
+  <div id="controls">
+    <div>W/A/S/D - Move</div>
+    <div>Mouse - Look</div>
+    <div>SPACE/Click - Shoot</div>
+  </div>
+  
+  <div id="message"></div>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"><\/script>
+  
+  <script>
+    // Game State
+    let scene, camera, renderer;
+    let spacecraft, earth;
+    let meteors = [];
+    let projectiles = [];
+    let stars = [];
+    let score = 0;
+    let earthHealth = 100;
+    let gameActive = false;
+    
+    // Controls
+    const keys = {};
+    let mouseX = 0, mouseY = 0;
+    const moveSpeed = 0.5;
+    const rotSpeed = 0.002;
+    
+    // Constants
+    const METEOR_SPEED = 0.02;
+    const PROJECTILE_SPEED = 1.0;
+    const METEOR_COUNT = 5;
+    const EARTH_RADIUS = 5;
+    
+    // Initialize
+    function init() {
+      // Scene
+      scene = new THREE.Scene();
+      scene.fog = new THREE.Fog(0x000000, 50, 200);
+      
+      // Camera
+      camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+      camera.position.set(0, 10, 30);
+      
+      // Renderer
+      renderer = new THREE.WebGLRenderer({ 
+        canvas: document.getElementById('gameCanvas'),
+        antialias: true 
+      });
+      renderer.setSize(window.innerWidth, window.innerHeight);
+      renderer.setClearColor(0x000000);
+      
+      // Lights
+      const ambientLight = new THREE.AmbientLight(0x404040, 0.5);
+      scene.add(ambientLight);
+      
+      const sunLight = new THREE.PointLight(0xffffff, 2, 200);
+      sunLight.position.set(50, 50, 50);
+      scene.add(sunLight);
+      
+      // Earth
+      createEarth();
+      
+      // Spacecraft
+      createSpacecraft();
+      
+      // Starfield
+      createStarfield();
+      
+      // Event Listeners
+      window.addEventListener('resize', onWindowResize);
+      document.addEventListener('keydown', (e) => keys[e.key.toLowerCase()] = true);
+      document.addEventListener('keyup', (e) => keys[e.key.toLowerCase()] = false);
+      document.addEventListener('mousemove', onMouseMove);
+      document.addEventListener('click', shoot);
+      document.addEventListener('keydown', (e) => {
+        if (e.key === ' ') {
+          e.preventDefault();
+          shoot();
+        }
+      });
+
+      document.getElementById('startBtn').addEventListener('click', startGame);
+    }
+
+    function startGame() {
+      document.getElementById('startScreen').style.display = 'none';
+      gameActive = true;
+      spawnMeteors();
+      animate();
+    }
+    
+    function createEarth() {
+      const geometry = new THREE.SphereGeometry(EARTH_RADIUS, 32, 32);
+      const texture = new THREE.TextureLoader().load('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTI4IiBoZWlnaHQ9IjEyOCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48ZGVmcz48cmFkaWFsR3JhZGllbnQgaWQ9ImciPjxzdG9wIG9mZnNldD0iMCUiIHN0b3AtY29sb3I9IiMwMDZkYmYiLz48c3RvcCBvZmZzZXQ9IjEwMCUiIHN0b3AtY29sb3I9IiMwMDNhNjAiLz48L3JhZGlhbEdyYWRpZW50PjwvZGVmcz48cmVjdCB3aWR0aD0iMTI4IiBoZWlnaHQ9IjEyOCIgZmlsbD0idXJsKCNnKSIvPjwvc3ZnPg==');
+      const material = new THREE.MeshPhongMaterial({ 
+        map: texture,
+        emissive: 0x0033aa,
+        emissiveIntensity: 0.2
+      });
+      earth = new THREE.Mesh(geometry, material);
+      scene.add(earth);
+      
+      // Earth glow
+      const glowGeometry = new THREE.SphereGeometry(EARTH_RADIUS + 0.5, 32, 32);
+      const glowMaterial = new THREE.MeshBasicMaterial({ 
+        color: 0x0088ff,
+        transparent: true,
+        opacity: 0.2
+      });
+      const glow = new THREE.Mesh(glowGeometry, glowMaterial);
+      earth.add(glow);
+    }
+    
+    function createSpacecraft() {
+      const group = new THREE.Group();
+      
+      // Main body
+      const bodyGeo = new THREE.ConeGeometry(0.5, 2, 4);
+      const bodyMat = new THREE.MeshPhongMaterial({ color: 0x00ff00, emissive: 0x00ff00, emissiveIntensity: 0.3 });
+      const body = new THREE.Mesh(bodyGeo, bodyMat);
+      body.rotation.x = Math.PI / 2;
+      group.add(body);
+      
+      // Wings
+      const wingGeo = new THREE.BoxGeometry(2, 0.1, 0.5);
+      const wingMat = new THREE.MeshPhongMaterial({ color: 0x00ff00 });
+      const wings = new THREE.Mesh(wingGeo, wingMat);
+      wings.position.z = -0.3;
+      group.add(wings);
+      
+      group.position.set(0, 5, 20);
+      spacecraft = group;
+      scene.add(spacecraft);
+    }
+    
+    function createStarfield() {
+      const starsGeometry = new THREE.BufferGeometry();
+      const starsMaterial = new THREE.PointsMaterial({ 
+        color: 0xffffff, 
+        size: 0.5,
+        transparent: true
+      });
+      
+      const starsVertices = [];
+      for (let i = 0; i < 1000; i++) {
+        const x = (Math.random() - 0.5) * 400;
+        const y = (Math.random() - 0.5) * 400;
+        const z = (Math.random() - 0.5) * 400;
+        starsVertices.push(x, y, z);
+      }
+      
+      starsGeometry.setAttribute('position', new THREE.Float32BufferAttribute(starsVertices, 3));
+      const starField = new THREE.Points(starsGeometry, starsMaterial);
+      scene.add(starField);
+    }
+    
+    function spawnMeteors() {
+      for (let i = 0; i < METEOR_COUNT; i++) {
+        setTimeout(() => {
+          createMeteor();
+        }, i * 2000);
+      }
+    }
+    
+    function createMeteor() {
+      const size = 0.5 + Math.random() * 1.5;
+      const geometry = new THREE.DodecahedronGeometry(size, 0);
+      const material = new THREE.MeshPhongMaterial({ 
+        color: 0x888888,
+        emissive: 0xff4400,
+        emissiveIntensity: 0.2
+      });
+      const meteor = new THREE.Mesh(geometry, material);
+      
+      // Random spawn position far from Earth
+      const angle = Math.random() * Math.PI * 2;
+      const height = (Math.random() - 0.5) * 40;
+      const distance = 80 + Math.random() * 40;
+      
+      meteor.position.set(
+        Math.cos(angle) * distance,
+        height,
+        Math.sin(angle) * distance
+      );
+      
+      // Calculate velocity toward Earth
+      const direction = new THREE.Vector3(0, 0, 0).sub(meteor.position).normalize();
+      meteor.velocity = direction.multiplyScalar(METEOR_SPEED);
+      meteor.mass = size * 100;
+      meteor.size = size;
+      
+      // Trail effect
+      const trailGeo = new THREE.BufferGeometry();
+      const trailMat = new THREE.LineBasicMaterial({ color: 0xff6600, transparent: true, opacity: 0.6 });
+      const trailPositions = new Float32Array(60);
+      trailGeo.setAttribute('position', new THREE.BufferAttribute(trailPositions, 3));
+      const trail = new THREE.Line(trailGeo, trailMat);
+      meteor.trail = trail;
+      scene.add(trail);
+      
+      scene.add(meteor);
+      meteors.push(meteor);
+      updateHUD();
+    }
+    
+    function shoot() {
+      if (!gameActive) return;
+      
+      const geometry = new THREE.SphereGeometry(0.3, 8, 8);
+      const material = new THREE.MeshBasicMaterial({ 
+        color: 0x00ff00,
+        emissive: 0x00ff00,
+        emissiveIntensity: 1
+      });
+      const projectile = new THREE.Mesh(geometry, material);
+      
+      projectile.position.copy(spacecraft.position);
+      
+      // Direction based on camera
+      const direction = new THREE.Vector3();
+      camera.getWorldDirection(direction);
+      projectile.velocity = direction.multiplyScalar(PROJECTILE_SPEED);
+      projectile.mass = 50;
+      
+      scene.add(projectile);
+      projectiles.push(projectile);
+    }
+    
+    function updateSpacecraft() {
+      // Movement
+      const forward = new THREE.Vector3();
+      camera.getWorldDirection(forward);
+      
+      const right = new THREE.Vector3();
+      right.crossVectors(camera.up, forward).normalize();
+      
+      if (keys['w']) spacecraft.position.add(forward.multiplyScalar(moveSpeed));
+      if (keys['s']) spacecraft.position.add(forward.multiplyScalar(-moveSpeed));
+      if (keys['a']) spacecraft.position.add(right.multiplyScalar(moveSpeed));
+      if (keys['d']) spacecraft.position.add(right.multiplyScalar(-moveSpeed));
+      
+      // Keep spacecraft in bounds
+      const dist = spacecraft.position.length();
+      if (dist > 50) {
+        spacecraft.position.normalize().multiplyScalar(50);
+      }
+      if (dist < EARTH_RADIUS + 3) {
+        spacecraft.position.normalize().multiplyScalar(EARTH_RADIUS + 3);
+      }
+      
+      // Camera follows spacecraft
+      camera.position.copy(spacecraft.position);
+      camera.position.z += 5;
+      camera.position.y += 2;
+      
+      // Rotate camera with mouse
+      camera.rotation.y -= mouseX * rotSpeed;
+      camera.rotation.x -= mouseY * rotSpeed;
+      camera.rotation.x = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, camera.rotation.x));
+      
+      // Spacecraft faces camera direction
+      spacecraft.lookAt(camera.position.clone().add(forward.multiplyScalar(10)));
+    }
+    
+    function updateMeteors() {
+      for (let i = meteors.length - 1; i >= 0; i--) {
+        const meteor = meteors[i];
+        
+        meteor.position.add(meteor.velocity);
+        meteor.rotation.x += 0.01;
+        meteor.rotation.y += 0.01;
+        
+        // Update trail
+        if (meteor.trail) {
+          const positions = meteor.trail.geometry.attributes.position.array;
+          for (let j = positions.length - 3; j >= 3; j -= 3) {
+            positions[j] = positions[j - 3];
+            positions[j + 1] = positions[j - 2];
+            positions[j + 2] = positions[j - 1];
+          }
+          positions[0] = meteor.position.x;
+          positions[1] = meteor.position.y;
+          positions[2] = meteor.position.z;
+          meteor.trail.geometry.attributes.position.needsUpdate = true;
+        }
+        
+        // Check Earth collision
+        if (meteor.position.length() < EARTH_RADIUS + meteor.size) {
+          scene.remove(meteor);
+          if (meteor.trail) scene.remove(meteor.trail);
+          meteors.splice(i, 1);
+          
+          earthHealth -= 20;
+          updateHUD();
+          showMessage('IMPACT DETECTED!', 'impact');
+          
+          if (earthHealth <= 0) {
+            gameOver();
+          }
+        }
+        
+        // Remove if too far
+        if (meteor.position.length() > 150) {
+          scene.remove(meteor);
+          if (meteor.trail) scene.remove(meteor.trail);
+          meteors.splice(i, 1);
+          updateHUD();
+        }
+      }
+    }
+    
+    function updateProjectiles() {
+      for (let i = projectiles.length - 1; i >= 0; i--) {
+        const proj = projectiles[i];
+        proj.position.add(proj.velocity);
+        
+        // Check meteor collision
+        for (let j = meteors.length - 1; j >= 0; j--) {
+          const meteor = meteors[j];
+          const dist = proj.position.distanceTo(meteor.position);
+          
+          if (dist < meteor.size + 0.3) {
+            // Momentum transfer physics
+            const impactDir = proj.velocity.clone().normalize();
+            const momentumTransfer = proj.velocity.clone().multiplyScalar(proj.mass / meteor.mass);
+            meteor.velocity.add(momentumTransfer);
+            
+            // Visual feedback
+            createExplosion(proj.position);
+            
+            scene.remove(proj);
+            projectiles.splice(i, 1);
+            
+            score += 100;
+            updateHUD();
+            break;
+          }
+        }
+        
+        // Remove if too far
+        if (proj.position.length() > 150) {
+          scene.remove(proj);
+          projectiles.splice(i, 1);
+        }
+      }
+    }
+    
+    function createExplosion(position) {
+      const geometry = new THREE.SphereGeometry(1, 8, 8);
+      const material = new THREE.MeshBasicMaterial({ 
+        color: 0xff6600,
+        transparent: true,
+        opacity: 0.8
+      });
+      const explosion = new THREE.Mesh(geometry, material);
+      explosion.position.copy(position);
+      scene.add(explosion);
+      
+      let scale = 1;
+      const expandInterval = setInterval(() => {
+        scale += 0.5;
+        explosion.scale.set(scale, scale, scale);
+        explosion.material.opacity -= 0.1;
+        
+        if (explosion.material.opacity <= 0) {
+          scene.remove(explosion);
+          clearInterval(expandInterval);
+        }
+      }, 50);
+    }
+    
+    function updateHUD() {
+      document.getElementById('meteorCount').textContent = meteors.length;
+      document.getElementById('score').textContent = score;
+      document.getElementById('healthFill').style.width = earthHealth + '%';
+      
+      if (meteors.length === 0 && gameActive) {
+        victory();
+      }
+    }
+    
+    function showMessage(text, className = '') {
+      const msg = document.getElementById('message');
+      msg.textContent = text;
+      msg.className = className;
+      msg.style.display = 'block';
+      
+      setTimeout(() => {
+        msg.style.display = 'none';
+      }, 3000);
+    }
+    
+    function victory() {
+      gameActive = false;
+      showMessage('EARTH SAVED!\nScore: ' + score);
+      setTimeout(() => location.reload(), 4000);
+    }
+    
+    function gameOver() {
+      gameActive = false;
+      showMessage('EARTH DESTROYED\nFinal Score: ' + score, 'impact');
+      setTimeout(() => location.reload(), 4000);
+    }
+    
+    function onMouseMove(e) {
+      mouseX = e.movementX || 0;
+      mouseY = e.movementY || 0;
+    }
+    
+    function onWindowResize() {
+      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(window.innerWidth, window.innerHeight);
+    }
+    
+    function animate() {
+      if (!gameActive) return;
+      requestAnimationFrame(animate);
+      
+      earth.rotation.y += 0.001;
+      
+      updateSpacecraft();
+      updateMeteors();
+      updateProjectiles();
+      
+      renderer.render(scene, camera);
+      
+      mouseX *= 0.95;
+      mouseY *= 0.95;
+    }
+    
+    // Start
+    init();
+  <\/script>
+</body>
+</html>`;
+
+      btn.addEventListener('click', async (e) => {
+        e.preventDefault();
+
+        // Try server route first
+        try {
+          const res = await fetch('/game', { method: 'HEAD' });
+          if (res && res.ok) {
+            window.location.href = '/game';
+            return;
+          }
+        } catch (err) {
+          // ignore network errors, try fallbacks
+        }
+
+        // Try a few likely local fallbacks
+        const fallbacks = ['./game.html', '/game.html', './templates/game.html'];
+        for (const path of fallbacks) {
+          try {
+            const r = await fetch(path, { method: 'HEAD' });
+            if (r && r.ok) {
+              window.location.href = path;
+              return;
+            }
+          } catch (err) {
+            // continue to next fallback
+          }
+        }
+
+        // Final fallback: open embedded game HTML in a new window (works even when server doesn't serve the file)
+        const w = window.open('', '_blank');
+        if (w) {
+          try {
+            w.document.open();
+            w.document.write(embeddedGameHtml);
+            w.document.close();
+          } catch (err) {
+            // if writing fails, try navigating current window to a data URL
+            const dataUrl = 'data:text/html;charset=utf-8,' + encodeURIComponent(embeddedGameHtml);
+            window.location.href = dataUrl;
+          }
+        } else {
+          // Popup blocked: navigate current window to data URL
+          const dataUrl = 'data:text/html;charset=utf-8,' + encodeURIComponent(embeddedGameHtml);
+          window.location.href = dataUrl;
+        }
+      });
+    })();
+  </script>
+  <!-- NASA NEOs Modal -->
+<div id="neoModal" class="modal">
+  <div id="neoPanel" class="modal-panel">
+    <div class="neo-header">
+      <h2>NASA Near-Earth Objects</h2>
+      <button id="closeNeoModal" class="close-btn">&times;</button>
+    </div>
+    <div id="neoContent" class="neo-content">
+      <p>Loading data...</p>
+    </div>
+  </div>
+</div>
+
+</body>
+</html>
